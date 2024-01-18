@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"time"
 )
 
 var done chan interface{}
@@ -37,4 +38,26 @@ func main() {
 	defer conn.Close()
 	go receive(conn)
 	
+	for {
+		select {
+		case <-time.After(time.Second * time.Duration(1)):
+			err := conn.WriteMessage(websocket.TextMessage, []byte("Hello World"))
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+		case <-interrupt:
+			log.Println("接收到中断信号")
+			if err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")); err != nil {
+				log.Fatal(err)
+				return
+			}
+			select {
+			case <-done:
+				log.Println("接收到客户端关闭")
+			case <-time.After(time.Duration(1) * time.Second):
+				log.Println("超时")
+			}
+		}
+	}
 }
