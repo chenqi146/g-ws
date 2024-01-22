@@ -58,6 +58,11 @@ func ws(w http.ResponseWriter, r *http.Request) {
 	
 	clientId := initClientId(conn)
 	
+	if clientId == "" {
+		return
+	}
+	log.Printf("[ws]: 连接websocket成功, clientId: %s\n", clientId)
+	
 	go handlerClientHeartbeat(clientId)
 	
 	for {
@@ -72,7 +77,37 @@ func ws(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlerClientMessage(conn *websocket.Conn, clientId string, messageType int, message []byte) {
-
+	
+	// ping  回复pong
+	
+	value, ok := Clients.Load(clientId)
+	if !ok {
+		handlerClientDisconnect(clientId)
+		return
+	}
+	
+	client := value.(WebsocketClient)
+	
+	if messageType != websocket.TextMessage {
+		return
+	}
+	
+	if string(message) != "ping" {
+		return
+	}
+	
+	if err := conn.WriteMessage(messageType, []byte("pong")); err != nil {
+		handlerClientDisconnect(clientId)
+		return
+	}
+	
+	Clients.Store(clientId, WebsocketClient{
+		Id:                clientId,
+		Conn:              conn,
+		LastHeartbeatTime: carbon.Now().Timestamp(),
+		Groups:            client.Groups,
+		UserId:            client.UserId,
+	})
 }
 
 func handlerClientDisconnect(clientId string) {
@@ -105,6 +140,7 @@ func initClientId(conn *websocket.Conn) string {
 	}
 	Clients.Store(clientId, client)
 	if err := conn.WriteMessage(websocket.TextMessage, []byte(clientId)); err != nil {
+		log.Println("[ws]: 发生clientId异常", err)
 		handlerClientDisconnect(clientId)
 		return ""
 	}
