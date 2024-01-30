@@ -1,0 +1,13 @@
+syntax = "v1"
+
+type Request {
+}
+
+type Response {
+}
+
+service gateway-api {
+	@handler GatewayHandler
+	get /test returns (Response)
+
+}
